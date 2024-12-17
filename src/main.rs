@@ -63,17 +63,13 @@ impl CNF {
 
         let lit = self.choose_literal().expect("This cannot happen!");
 
-        if let Some(more_assignments) = self
-            .clone()
-            .with_clause([lit])
-            .dpll()
-            .or_else(|| self.with_clause([-lit]).dpll())
-        {
-            assignments.extend(more_assignments);
-            return Some(assignments);
-        }
-
-        None
+        assignments.extend(
+            self.clone()
+                .with_clause([lit])
+                .dpll()
+                .or_else(|| self.with_clause([-lit]).dpll())?,
+        );
+        Some(assignments)
     }
 }
 
