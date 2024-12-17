@@ -15,15 +15,13 @@ impl CNF {
         self
     }
 
-    pub fn is_pure_literal(&self, lit: &Literal) -> bool {
-        self.0.iter().all(|clause| !clause.contains(&-lit))
+    pub fn iter_literals(&self) -> impl Iterator<Item = &Literal> {
+        self.0.iter().flatten()
     }
 
     pub fn find_pure_literal(&self) -> Option<Literal> {
-        self.0
-            .iter()
-            .flat_map(|clause| clause.iter())
-            .filter(|lit| self.is_pure_literal(lit))
+        self.iter_literals()
+            .filter(|&lit| self.iter_literals().any(|&other| other == -lit))
             .next()
             .copied()
     }
@@ -32,17 +30,13 @@ impl CNF {
         self.0
             .iter()
             .filter(|clause| clause.len() == 1)
-            .flat_map(|clause| clause.iter())
+            .flatten()
             .next()
             .copied()
     }
 
     pub fn choose_literal(&self) -> Option<Literal> {
-        self.0
-            .iter()
-            .flat_map(|clause| clause.iter())
-            .next()
-            .copied()
+        self.iter_literals().next().copied()
     }
 
     pub fn dpll(mut self) -> Option<Vec<Literal>> {
