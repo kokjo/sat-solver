@@ -29,16 +29,11 @@ impl CNF {
     pub fn dpll(mut self) -> Option<Vec<i64>> {
         let mut assignments = Vec::new();
 
-        while let Some(&lit) = self.find_unit() {
+        while let Some(&lit) = self.find_unit().or_else(|| self.find_pure_literal()) {
             self.0.retain_mut(|clause| {
                 clause.remove(&-lit);
                 !clause.contains(&lit)
             });
-            assignments.push(lit);
-        }
-
-        while let Some(&lit) = self.find_pure_literal() {
-            self.0.retain(|clause| !clause.contains(&lit));
             assignments.push(lit);
         }
 
