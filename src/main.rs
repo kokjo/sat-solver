@@ -42,15 +42,11 @@ impl CNF {
             assignments.push(lit);
         }
 
-        if self.0.iter().any(|clause| clause.is_empty()) {
+        if self.0.iter().any(BTreeSet::is_empty) {
             return None;
-        } else if let Some(&lit) = self.0.first().and_then(|clause| clause.first()) {
-            assignments.extend(
-                self.clone()
-                    .with_clause([lit])
-                    .dpll()
-                    .or_else(|| self.with_clause([-lit]).dpll())?,
-            );
+        } else if let Some(&lit) = self.0.first().and_then(BTreeSet::first) {
+            let sol = |lit| self.clone().with_clause([lit]).dpll();
+            assignments.extend(sol(lit).or_else(|| sol(-lit))?);
         }
 
         Some(assignments)
