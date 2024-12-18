@@ -1,7 +1,7 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct CNF(Vec<HashSet<i64>>);
+struct CNF(Vec<BTreeSet<i64>>);
 
 impl CNF {
     pub fn add_clause(&mut self, clause: impl IntoIterator<Item = i64>) {
@@ -13,28 +13,23 @@ impl CNF {
         self
     }
 
-    pub fn literals(&self) -> impl Iterator<Item = i64> + '_ {
-        self.0.iter().flatten().copied()
-    }
-
-    pub fn find_pure_literal(&self) -> Option<i64> {
-        self.literals()
-            .find(|&lit| self.literals().all(|o| o != -lit))
-    }
-
-    pub fn find_unit(&self) -> Option<i64> {
+    pub fn find_pure_literal(&self) -> Option<&i64> {
         self.0
             .iter()
-            .filter(|clause| clause.len() == 1)
             .flatten()
-            .next()
-            .copied()
+            .find(|&lit| self.0.iter().flatten().all(|&o| o != -lit))
+    }
+
+    pub fn find_unit(&self) -> Option<&i64> {
+        self.0
+            .iter()
+            .find_map(|clause| clause.first().filter(|_| clause.len() == 1))
     }
 
     pub fn dpll(mut self) -> Option<Vec<i64>> {
         let mut assignments = Vec::new();
 
-        while let Some(lit) = self.find_unit() {
+        while let Some(&lit) = self.find_unit() {
             self.0.retain_mut(|clause| {
                 clause.remove(&-lit);
                 !clause.contains(&lit)
@@ -42,19 +37,19 @@ impl CNF {
             assignments.push(lit);
         }
 
-        while let Some(lit) = self.find_pure_literal() {
+        while let Some(&lit) = self.find_pure_literal() {
             self.0.retain(|clause| !clause.contains(&lit));
             assignments.push(lit);
         }
 
         if self.0.iter().any(|clause| clause.is_empty()) {
             return None;
-        } else if let Some(lit) = self.literals().next() {
+        } else if let Some(&lit) = self.0.first().and_then(|clause| clause.first()) {
             assignments.extend(
                 self.clone()
                     .with_clause([lit])
                     .dpll()
-                    .or_else(|| self.clone().with_clause([-lit]).dpll())?,
+                    .or_else(|| self.with_clause([-lit]).dpll())?,
             );
         }
 
