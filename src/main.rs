@@ -13,17 +13,21 @@ use design::{Design, Cell};
 pub mod cnf;
 use cnf::{Cnf, MaybeBits};
 
-fn map_aby_cell<T>(cell: &Cell, f: fn(u64, u64, u64) -> T) -> Vec<T> {
-    let a = cell.connections.get("A").unwrap();
-    let b = cell.connections.get("B").unwrap();
-    let y = cell.connections.get("Y").unwrap();
-    a.iter().zip(b).zip(y).map(|((&a, &b), &y)| f(a, b, y)).collect()
+pub fn cell_get_conns<'a>(name: &str, cell: &'a Cell, conn: &str) -> anyhow::Result<&'a Vec<u64>> {
+    cell.connections.get(conn).context(format!("Could not find {conn:?} connection on module {name:?} of type {:?}", cell.module))
 }
 
-fn map_ay_cell<T>(cell: &Cell, f: fn(u64, u64) -> T) -> Vec<T> {
-    let a = cell.connections.get("A").unwrap();
-    let y = cell.connections.get("Y").unwrap();
-    a.iter().zip(y).map(|(&a, &y)| f(a, y)).collect()
+fn map_aby_cell<T>(name: &str, cell: &Cell, f: fn(u64, u64, u64) -> T) -> anyhow::Result<Vec<T>> {
+    let a = cell_get_conns(name, cell, "A")?;
+    let b = cell_get_conns(name, cell, "B")?;
+    let y = cell_get_conns(name, cell, "Y")?;
+    Ok(a.iter().zip(b).zip(y).map(|((&a, &b), &y)| f(a, b, y)).collect())
+}
+
+fn map_ay_cell<T>(name: &str, cell: &Cell, f: fn(u64, u64) -> T) -> anyhow::Result<Vec<T>> {
+    let a = cell_get_conns(name, cell, "A")?;
+    let y = cell_get_conns(name, cell, "Y")?;
+    Ok(a.iter().zip(y).map(|(&a, &y)| f(a, y)).collect())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -59,16 +63,16 @@ fn main() -> anyhow::Result<()> {
     let module = design.modules.get(&args.module).context(format!("Could not find module {:?} in design", args.module))?;
 
     let mut gates = vec![];
-    for (_name, cell) in module.cells.iter() {
+    for (name, cell) in module.cells.iter() {
         gates.extend(match cell.module.as_str() {
-            "$_AND_" => map_aby_cell(cell, Gate::And),
-            "$_NAND_" => map_aby_cell(cell, Gate::Nand),
-            "$_OR_" => map_aby_cell(cell, Gate::Or),
-            "$_NOR_" => map_aby_cell(cell, Gate::Nor),
-            "$_NOT_" => map_ay_cell(cell, Gate::Not),
-            "$_XOR_" => map_aby_cell(cell, Gate::Xor),
-            "$_XNOR_" => map_aby_cell(cell, Gate::Xnor),
-            _ => panic!("Unknown Cell: {cell:?}")
+            "$_AND_" => map_aby_cell(name, cell, Gate::And)?,
+            "$_NAND_" => map_aby_cell(name, cell, Gate::Nand)?,
+            "$_OR_" => map_aby_cell(name, cell, Gate::Or)?,
+            "$_NOR_" => map_aby_cell(name, cell, Gate::Nor)?,
+            "$_NOT_" => map_ay_cell(name, cell, Gate::Not)?,
+            "$_XOR_" => map_aby_cell(name, cell, Gate::Xor)?,
+            "$_XNOR_" => map_aby_cell(name, cell, Gate::Xnor)?,
+            _ => return Err(anyhow::Error::msg(format!("Unknown Cell: {cell:?}")))
         });
     }
 
@@ -88,20 +92,23 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    println!("Ports:");
-    let model = cnf.dpll().unwrap();
-    for (name, port) in module.ports.iter() {
-        let bits = model.get_bits(port.bits.iter().cloned());
-        println!("{name}: {bits}");
-    }
-
-    println!("Nets:");
-    for (name, net) in module.nets.iter() {
-        if net.extra.get("hide_name") == Some(&json!(1)) {
-            continue;
+    if let Some(model) = cnf.dpll() {
+        println!("Ports:");
+        for (name, port) in module.ports.iter() {
+            let bits = model.get_bits(port.bits.iter().cloned());
+            println!("{name}: {bits}");
         }
-        let bits = model.get_bits(net.bits.iter().cloned());
-        println!("{name}: {bits}");
+
+        println!("Nets:");
+        for (name, net) in module.nets.iter() {
+            if net.extra.get("hide_name") == Some(&json!(1)) {
+                continue;
+            }
+            let bits = model.get_bits(net.bits.iter().cloned());
+            println!("{name}: {bits}");
+        }
+    } else {
+        println!("Unsatisfiable")
     }
 
     Ok(())
