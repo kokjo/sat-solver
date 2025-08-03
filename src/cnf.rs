@@ -1,5 +1,7 @@
 use std::{collections::BTreeSet, str::FromStr};
 
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MaybeBits(Vec<Option<bool>>);
 
@@ -73,7 +75,7 @@ impl std::ops::DerefMut for Model {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Cnf(Vec<BTreeSet<i64>>);
 
 impl Cnf {
